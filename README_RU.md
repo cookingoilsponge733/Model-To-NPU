@@ -37,7 +37,7 @@
 - **Статус документации:** обновлена под текущую известную структуру
 
 Для живого примера того, как сейчас выглядит SDXL-папка на телефоне после деплоя, см. [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
-Для небольшого rooted-набора с реальными helper-файлами, логами и PNG-результатами см. [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
+Также добавлен небольшой rooted-набор артефактов в [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/) — как справочный и учебный пример.
 
 Для практических подводных камней и накопленных технических заметок см. [`SDXL/LESSONS_LEARNED.md`](SDXL/LESSONS_LEARNED.md) и русскую версию [`SDXL/LESSONS_LEARNED_RU.md`](SDXL/LESSONS_LEARNED_RU.md).
 
@@ -46,7 +46,7 @@
 ### Телефон
 
 | Компонент | Требование |
-|-----------|------------|
+| --------- | ---------- |
 | **SoC** | Qualcomm Snapdragon 8 Elite (SM8750) или совместимый с QNN HTP |
 | **RAM** | 16 GB (пик ~12 GB, свободно >= 6 GB) |
 | **Хранилище** | ~10 GB для моделей и context binary в общей папке вроде `/sdcard/Download/sdxl_qnn` |
@@ -56,7 +56,7 @@
 ### ПК (для сборки текущего pipeline)
 
 | Компонент | Версия |
-|-----------|--------|
+| --------- | ------ |
 | Python | 3.10.x (именно 3.10, не 3.11+) |
 | QAIRT SDK | 2.31+ (Qualcomm AI Engine Direct) |
 | Android NDK | r26+ (для сборки `.so`) |
@@ -68,7 +68,7 @@
 Замерено на OnePlus 13 (Snapdragon 8 Elite, 16 GB RAM):
 
 | Этап | Время | Формат |
-|------|-------|--------|
+| ---- | ----- | ------ |
 | CLIP-L | ~375 мс | FP16 |
 | CLIP-G | ~1500 мс | FP16 |
 | UNet encoder (1 шаг) | ~7.1 с | FP16 |
@@ -182,7 +182,6 @@ python SDXL/generate.py "cat on windowsill, masterpiece" --seed 42
 
 - минимально необходимая структура — ниже;
 - живая историческая структура — в [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
-- облегчённый rooted-набор файлов — в [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
 
 ## Структура проекта
 
@@ -198,8 +197,9 @@ python SDXL/generate.py "cat on windowsill, masterpiece" --seed 42
 │   ├── vocab.json
 │   └── merges.txt
 ├── examples/
-│   └── phone-sdxl-qnn-layout.md ← живой пример раскладки на телефоне
-│   └── rooted-phone-sample/     ← небольшой rooted-набор файлов, логов и PNG
+│   ├── phone-sdxl-qnn-layout.md    ← живой пример rooted-раскладки на телефоне
+│   ├── phone-sdxl-qnn-layout_RU.md ← русская версия примера rooted-раскладки
+│   └── rooted-phone-sample/        ← небольшой набор rooted-артефактов (доки, PNG, конфиги, скрипты)
 ├── .github/
 │   └── ISSUE_TEMPLATE/
 │       └── bug_report.md

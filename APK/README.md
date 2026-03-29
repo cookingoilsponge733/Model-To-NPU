@@ -1,5 +1,7 @@
 # Model-to-NPU Android Application
 
+**Языки:** [Русский](README.md) | [English](README_EN.md)
+
 **Current target:** SDXL
 
 > [!WARNING]

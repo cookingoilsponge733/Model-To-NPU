@@ -69,3 +69,9 @@ The live phone snapshot also contains files that are useful for development/debu
 - to show a concrete result already produced by the tooling;
 - to help compare the documented minimal layout with a real phone deployment;
 - to avoid committing multi-gigabyte binaries into git.
+
+## Related examples
+
+- rooted sample artifacts: [`rooted-phone-sample/README.md`](rooted-phone-sample/README.md)
+- rooted sample artifacts (RU): [`rooted-phone-sample/README_RU.md`](rooted-phone-sample/README_RU.md)
+- Russian translation of this page: [`phone-sdxl-qnn-layout_RU.md`](phone-sdxl-qnn-layout_RU.md)
