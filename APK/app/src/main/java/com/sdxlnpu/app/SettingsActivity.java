@@ -25,8 +25,11 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String PREFS_NAME = "sdxl_npu_prefs";
     public static final String KEY_BASE_DIR = "base_dir";
     public static final String KEY_PYTHON_PATH = "python_path";
-    public static final String DEFAULT_BASE_DIR = "/sdcard/Download/sdxl_qnn";
+    public static final String DOWNLOADS_BASE_DIR = "/sdcard/Download/sdxl_qnn";
+    public static final String LEGACY_BASE_DIR = "/data/local/tmp/sdxl_qnn";
+    public static final String DEFAULT_BASE_DIR = DOWNLOADS_BASE_DIR;
     public static final String DEFAULT_PYTHON = "python3";
+    public static final String LEGACY_PYTHON = "/data/data/com.termux/files/usr/bin/python3";
 
     private TextInputEditText baseDirInput;
     private TextInputEditText pythonPathInput;
@@ -50,8 +53,10 @@ public class SettingsActivity extends AppCompatActivity {
 
         // Load saved preferences
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        baseDirInput.setText(prefs.getString(KEY_BASE_DIR, DEFAULT_BASE_DIR));
-        pythonPathInput.setText(prefs.getString(KEY_PYTHON_PATH, DEFAULT_PYTHON));
+        String detectedBaseDir = detectDefaultBaseDir();
+        String detectedPython = detectDefaultPython(detectedBaseDir);
+        baseDirInput.setText(prefs.getString(KEY_BASE_DIR, detectedBaseDir));
+        pythonPathInput.setText(prefs.getString(KEY_PYTHON_PATH, detectedPython));
 
         saveBtn.setOnClickListener(v -> saveSettings());
         resetBtn.setOnClickListener(v -> resetSettings());
@@ -71,8 +76,8 @@ public class SettingsActivity extends AppCompatActivity {
         String baseDir = baseDirInput.getText().toString().trim();
         String python = pythonPathInput.getText().toString().trim();
 
-        if (baseDir.isEmpty()) baseDir = DEFAULT_BASE_DIR;
-        if (python.isEmpty()) python = DEFAULT_PYTHON;
+        if (baseDir.isEmpty()) baseDir = detectDefaultBaseDir();
+        if (python.isEmpty()) python = detectDefaultPython(baseDir);
 
         // Basic validation — no command injection
         if (baseDir.contains(";") || baseDir.contains("&") || baseDir.contains("|")
@@ -92,14 +97,15 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void resetSettings() {
-        baseDirInput.setText(DEFAULT_BASE_DIR);
-        pythonPathInput.setText(DEFAULT_PYTHON);
+        String detectedBaseDir = detectDefaultBaseDir();
+        baseDirInput.setText(detectedBaseDir);
+        pythonPathInput.setText(detectDefaultPython(detectedBaseDir));
         Toast.makeText(this, "Сброшено к значениям по умолчанию", Toast.LENGTH_SHORT).show();
     }
 
     private void verifySetup() {
         String baseDir = baseDirInput.getText().toString().trim();
-        if (baseDir.isEmpty()) baseDir = DEFAULT_BASE_DIR;
+        if (baseDir.isEmpty()) baseDir = detectDefaultBaseDir();
 
         // Basic validation
         if (baseDir.contains(";") || baseDir.contains("&") || baseDir.contains("|")) {
@@ -142,5 +148,21 @@ public class SettingsActivity extends AppCompatActivity {
             .append("\n    ")
             .append(path)
             .append("\n\n");
+    }
+
+    public static String detectDefaultBaseDir() {
+        if (new File(LEGACY_BASE_DIR).exists()) {
+            return LEGACY_BASE_DIR;
+        }
+        if (new File(DOWNLOADS_BASE_DIR).exists()) {
+            return DOWNLOADS_BASE_DIR;
+        }
+        return DEFAULT_BASE_DIR;
+    }
+
+    public static String detectDefaultPython(String baseDir) {
+        return baseDir != null && baseDir.startsWith(LEGACY_BASE_DIR)
+            ? LEGACY_PYTHON
+            : DEFAULT_PYTHON;
     }
 }

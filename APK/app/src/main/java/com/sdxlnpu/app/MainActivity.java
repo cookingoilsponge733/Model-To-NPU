@@ -50,6 +50,8 @@ import java.util.regex.Pattern;
  */
 public class MainActivity extends AppCompatActivity {
 
+    private static final String LEGACY_BASE_DIR = SettingsActivity.LEGACY_BASE_DIR;
+
     private String BASE_DIR;
     private String GEN_SCRIPT;
     private String OUTPUT_DIR;
@@ -138,16 +140,18 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         SharedPreferences prefs = getSharedPreferences(
             SettingsActivity.PREFS_NAME, MODE_PRIVATE);
+        String detectedBaseDir = SettingsActivity.detectDefaultBaseDir();
+        String detectedPython = SettingsActivity.detectDefaultPython(detectedBaseDir);
         BASE_DIR = prefs.getString(SettingsActivity.KEY_BASE_DIR,
-            SettingsActivity.DEFAULT_BASE_DIR);
+            detectedBaseDir);
         PYTHON = prefs.getString(SettingsActivity.KEY_PYTHON_PATH,
-            SettingsActivity.DEFAULT_PYTHON);
+            detectedPython);
         GEN_SCRIPT = BASE_DIR + "/phone_gen/generate.py";
         OUTPUT_DIR = BASE_DIR + "/outputs";
     }
 
     private void checkPrerequisites() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+        if (!shouldUseRootShell() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
             statusText.setText("Нужен доступ ко всем файлам для чтения " + BASE_DIR +
                 "\nНажмите Generate или откройте системное разрешение вручную");
             return;
@@ -256,7 +260,8 @@ public class MainActivity extends AppCompatActivity {
     private void runPipeline(String prompt, long seed, int steps,
                              float cfg, String neg, boolean stretch,
                              String outName) throws IOException, InterruptedException {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+        boolean useRootShell = shouldUseRootShell();
+        if (!useRootShell && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
             throw new IOException("Нет доступа к общей папке Downloads. Выдайте приложению доступ ко всем файлам.");
         }
 
@@ -289,7 +294,12 @@ public class MainActivity extends AppCompatActivity {
 
         updateStatus("Запуск...", 2);
 
-        ProcessBuilder pb = new ProcessBuilder("/system/bin/sh");
+        ProcessBuilder pb;
+        if (useRootShell) {
+            pb = new ProcessBuilder(findSu(), "--mount-master");
+        } else {
+            pb = new ProcessBuilder("/system/bin/sh");
+        }
         pb.redirectErrorStream(true);
         Process process = pb.start();
         currentProcess = process;
@@ -377,6 +387,8 @@ public class MainActivity extends AppCompatActivity {
             String hint;
             if (exitCode == 127) {
                 hint = "Команда не найдена (код 127).\nПроверьте путь/команду Python в Настройках.";
+            } else if (useRootShell && (exitCode == 1 || exitCode == 13 || exitCode == 126)) {
+                hint = "Root-доступ не предоставлен или окружение Termux недоступно.\nПроверьте Magisk и путь к Python в Настройках.";
             } else if (exitCode == 1 || exitCode == 13 || exitCode == 126) {
                 hint = "Нет доступа к файлам или исполняемым компонентам.\nПроверьте путь к Downloads и команду Python в Настройках.";
             } else {
@@ -425,6 +437,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean ensureExternalStorageAccess() {
+        if (shouldUseRootShell()) {
+            return true;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
             try {
                 Intent intent = new Intent(
@@ -442,6 +457,21 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         return true;
+    }
+
+    private boolean shouldUseRootShell() {
+        return BASE_DIR != null && BASE_DIR.startsWith(LEGACY_BASE_DIR);
+    }
+
+    private static String findSu() {
+        for (String path : new String[]{
+            "/product/bin/su",
+            "/sbin/su", "/system/xbin/su", "/system/bin/su",
+            "/su/bin/su", "/data/adb/magisk/su"
+        }) {
+            if (new File(path).exists()) return path;
+        }
+        return "su";
     }
 
     private void saveImage() {
