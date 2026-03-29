@@ -41,6 +41,8 @@
 
 Для практических подводных камней и накопленных технических заметок см. [`SDXL/LESSONS_LEARNED.md`](SDXL/LESSONS_LEARNED.md) и русскую версию [`SDXL/LESSONS_LEARNED_RU.md`](SDXL/LESSONS_LEARNED_RU.md).
 
+Для карты всех текущих скриптов в `SDXL/` см. [`SDXL/SCRIPTS_OVERVIEW.md`](SDXL/SCRIPTS_OVERVIEW.md) и [`SDXL/SCRIPTS_OVERVIEW_RU.md`](SDXL/SCRIPTS_OVERVIEW_RU.md).
+
 ## Требования для текущего SDXL pipeline
 
 ### Телефон
@@ -106,6 +108,14 @@ python scripts/download_adb.py
 # Экспериментальный помощник для ранних SDXL-этапов
 python scripts/build_all.py --checkpoint path/to/model.safetensors
 ```
+
+Также добавлен аккуратный beta-wrapper для текущего документированного пути:
+
+```powershell
+pwsh SDXL/run_end_to_end.ps1 -Checkpoint path/to/model.safetensors -ContextsDir path/to/context_binaries
+```
+
+Он специально разделяет воспроизводимые ранние шаги сборки и ещё beta/runtime/deploy-часть.
 
 Или пошагово:
 
@@ -276,7 +286,7 @@ Prompt ──▶│ CLIP-L ──┐                                            
 
 - **Разрешение фиксировано** 1024×1024 — другие размеры требуют полной переконвертации
 - **VAE FP16** слегка сжимает цветовой диапазон -> применяется percentile contrast stretching
-- **CFG удваивает время** — UNet запускается дважды (cond + uncond) на каждом шаге
+- **CFG > 1.0 здесь дорогой** — нужны и conditional, и unconditional предсказания; поскольку runtime использует split UNet (`encoder` + `decoder`), наивный CFG превращает каждый шаг в четыре phone-side запуска UNet-подпроцессов. Текущий runtime уже батчит часть этой работы лучше, чем раньше, но по wall-clock времени это всё равно почти 2× относительно no-CFG пути.
 - **Termux обязателен** — Python runtime для `phone_generate.py`
 - **Для APK на Android 11+ может понадобиться доступ ко всем файлам** — чтобы читать `/sdcard/Download/sdxl_qnn`
 - Тестировалось только на **OnePlus 13 (SM8750)**

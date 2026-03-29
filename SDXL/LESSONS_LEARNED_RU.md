@@ -129,6 +129,23 @@ export ADSP_LIBRARY_PATH='/sdcard/Download/sdxl_qnn/lib;/vendor/lib64/rfs/dsp;/v
 
 Это distilled-модель, так что привычные представления о CFG тут надо применять аккуратно.
 
+### Почему CFG здесь так сильно бьёт по wall-clock времени
+
+В этом репозитории CFG дорогой сразу по двум причинам:
+
+1. classifier-free guidance требует и **cond**, и **uncond** предсказания;
+2. phone-side runtime использует **split UNet** (`encoder` + `decoder`).
+
+То есть наивно один шаг CFG превращается не просто в «два UNet-прогона», а в:
+
+- uncond encoder
+- uncond decoder
+- cond encoder
+- cond decoder
+
+Итог: один denoising step легко распухает до **четырёх QNN-подпроцессов** плюс дополнительного file I/O.
+Текущий phone runtime уже умеет батчить cond/uncond часть этой работы заметно лучше, чем раньше, но реальной NPU-работы всё равно примерно вдвое больше, чем в no-CFG пути.
+
 ### Scheduler должен быть `EulerDiscreteScheduler` c `timestep_spacing="trailing"`
 
 Это не эстетика, а рабочее требование Lightning.

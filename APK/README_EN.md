@@ -140,6 +140,7 @@ Through ⚙️ in the ActionBar you can:
 
 - the APK launches `phone_generate.py` without `su`, through a normal shell and a configurable Python command;
 - the default layout uses `/sdcard/Download/sdxl_qnn`;
+- CFG above `1.0` is noticeably slower because the phone runtime still needs both cond and uncond denoising branches; with a split UNet that translates into substantially more encoder/decoder work per step even after batching optimizations;
 - stdout is parsed in real time to display progress;
 - the resulting PNG is loaded through `BitmapFactory.decodeFile()`;
 - gallery saving uses the Android `MediaStore` API.

@@ -22,9 +22,21 @@ import torch
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
-SDXL_NPU = ROOT / "sdxl_npu"
-DIFFUSERS_DIR = SDXL_NPU / "diffusers_pipeline"
-ONNX_OUT = SDXL_NPU / "onnx_clip_vae"
+
+
+def _default_work_root():
+    override = os.environ.get("MODEL_TO_NPU_WORK_ROOT")
+    if override:
+        return Path(override)
+    legacy = ROOT / "sdxl_npu"
+    if legacy.exists():
+        return legacy
+    return ROOT / "build" / "sdxl_work"
+
+
+WORK_ROOT = _default_work_root()
+DIFFUSERS_DIR = Path(os.environ.get("MODEL_TO_NPU_DIFFUSERS_DIR", str(WORK_ROOT / "diffusers_pipeline")))
+ONNX_OUT = Path(os.environ.get("MODEL_TO_NPU_ONNX_CLIP_VAE_OUT", str(WORK_ROOT / "onnx_clip_vae")))
 
 
 class CLIPLWrapper(torch.nn.Module):
@@ -54,7 +66,7 @@ class CLIPGWrapper(torch.nn.Module):
         return penultimate, text_embeds
 
 
-def export_clip_l(out_dir: Path, opset: int = 17, force: bool = False):
+def export_clip_l(diffusers_dir: Path, out_dir: Path, opset: int = 17, force: bool = False):
     """Export CLIP-L text encoder: hidden_states[-2] output."""
     from transformers import CLIPTextModel
 
@@ -65,7 +77,7 @@ def export_clip_l(out_dir: Path, opset: int = 17, force: bool = False):
 
     print("[clip_l] Loading from diffusers pipeline...")
     model = CLIPTextModel.from_pretrained(
-        str(DIFFUSERS_DIR / "text_encoder"),
+        str(diffusers_dir / "text_encoder"),
         local_files_only=True,
     )
     model.eval()
@@ -107,7 +119,7 @@ def export_clip_l(out_dir: Path, opset: int = 17, force: bool = False):
     gc.collect()
 
 
-def export_clip_g(out_dir: Path, opset: int = 17, force: bool = False):
+def export_clip_g(diffusers_dir: Path, out_dir: Path, opset: int = 17, force: bool = False):
     """Export CLIP-G text encoder: hidden_states[-2] + text_embeds."""
     from transformers import CLIPTextModelWithProjection
 
@@ -118,7 +130,7 @@ def export_clip_g(out_dir: Path, opset: int = 17, force: bool = False):
 
     print("[clip_g] Loading from diffusers pipeline...")
     model = CLIPTextModelWithProjection.from_pretrained(
-        str(DIFFUSERS_DIR / "text_encoder_2"),
+        str(diffusers_dir / "text_encoder_2"),
         local_files_only=True,
     )
     model.eval()
@@ -162,7 +174,7 @@ def export_clip_g(out_dir: Path, opset: int = 17, force: bool = False):
     gc.collect()
 
 
-def export_vae_decoder(out_dir: Path, opset: int = 17, force: bool = False):
+def export_vae_decoder(diffusers_dir: Path, out_dir: Path, opset: int = 17, force: bool = False):
     """Export VAE decoder from diffusers pipeline."""
     from diffusers import AutoencoderKL
 
@@ -173,7 +185,7 @@ def export_vae_decoder(out_dir: Path, opset: int = 17, force: bool = False):
 
     print("[vae] Loading from diffusers pipeline...")
     vae = AutoencoderKL.from_pretrained(
-        str(DIFFUSERS_DIR / "vae"),
+        str(diffusers_dir / "vae"),
         local_files_only=True,
     )
     # VAE weights are FP16, ONNX export requires float32 for tracing
@@ -223,21 +235,23 @@ def export_vae_decoder(out_dir: Path, opset: int = 17, force: bool = False):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--component", choices=["clip_l", "clip_g", "vae", "all"], default="all")
+    ap.add_argument("--diffusers-dir", type=str, default=None)
     ap.add_argument("--out-dir", type=str, default=None)
     ap.add_argument("--opset", type=int, default=17)
     ap.add_argument("--force", action="store_true", help="Overwrite existing ONNX files")
     args = ap.parse_args()
 
+    diffusers_dir = Path(args.diffusers_dir) if args.diffusers_dir else DIFFUSERS_DIR
     out_dir = Path(args.out_dir) if args.out_dir else ONNX_OUT
     force = args.force
-    print(f"[config] component={args.component}, out={out_dir}, opset={args.opset}, force={force}")
+    print(f"[config] component={args.component}, diffusers={diffusers_dir}, out={out_dir}, opset={args.opset}, force={force}")
 
     if args.component in ("clip_l", "all"):
-        export_clip_l(out_dir, args.opset, force)
+        export_clip_l(diffusers_dir, out_dir, args.opset, force)
     if args.component in ("clip_g", "all"):
-        export_clip_g(out_dir, args.opset, force)
+        export_clip_g(diffusers_dir, out_dir, args.opset, force)
     if args.component in ("vae", "all"):
-        export_vae_decoder(out_dir, args.opset, force)
+        export_vae_decoder(diffusers_dir, out_dir, args.opset, force)
 
     print("\n[done] Export complete!")
 

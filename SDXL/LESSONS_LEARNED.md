@@ -152,6 +152,23 @@ Spatial tensors must be fed in **NHWC** layout to QNN, not NCHW.
 SDXL-Lightning is a distilled model — it does NOT use classifier-free guidance.
 Single UNet pass per step, no uncond/cond pair needed. `guidance_scale=0` or `1`.
 
+### Why CFG still hurts wall-clock time so much
+
+In this repository, CFG is expensive for two reasons at once:
+
+1. classifier-free guidance needs both **cond** and **uncond** predictions;
+2. the phone runtime uses a **split UNet** (`encoder` + `decoder`).
+
+That means a naive CFG step is not just “run UNet twice” in the abstract — it can become:
+
+- uncond encoder
+- uncond decoder
+- cond encoder
+- cond decoder
+
+So one denoising step can expand into **four QNN subprocess launches** plus extra file I/O.
+The current phone runtime now batches cond/uncond work more efficiently, which reduces subprocess overhead, but the real NPU workload is still roughly doubled versus the no-CFG path.
+
 ### Scheduler: EulerDiscrete, trailing
 
 Must use `EulerDiscreteScheduler` with `timestep_spacing="trailing"`.

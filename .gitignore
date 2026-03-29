@@ -49,3 +49,6 @@ subgraph_probes/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local drafts / scratch (never commit)
+1/

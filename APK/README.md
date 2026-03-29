@@ -140,6 +140,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 - APK запускает `phone_generate.py` без `su`, через обычный shell и настраиваемую Python-команду
 - По умолчанию используется общая папка `/sdcard/Download/sdxl_qnn`
+- CFG выше `1.0` заметно замедляет генерацию, потому что phone-side runtime всё ещё считает и cond-, и uncond-ветку; при split UNet это означает существенно больше encoder/decoder-работы на каждый шаг даже после batching-оптимизаций
 - stdout парсится в реальном времени для отображения прогресса
 - результат (PNG) загружается через `BitmapFactory.decodeFile()`
 - сохранение в галерею идёт через `MediaStore` API

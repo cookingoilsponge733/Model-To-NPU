@@ -41,6 +41,8 @@ There is also a small rooted artifact bundle under [`examples/rooted-phone-sampl
 
 For accumulated technical pitfalls and implementation notes, see [`SDXL/LESSONS_LEARNED.md`](SDXL/LESSONS_LEARNED.md) and the Russian counterpart [`SDXL/LESSONS_LEARNED_RU.md`](SDXL/LESSONS_LEARNED_RU.md).
 
+For a categorized map of every script currently living under `SDXL/`, see [`SDXL/SCRIPTS_OVERVIEW.md`](SDXL/SCRIPTS_OVERVIEW.md) and [`SDXL/SCRIPTS_OVERVIEW_RU.md`](SDXL/SCRIPTS_OVERVIEW_RU.md).
+
 ## Requirements for the current SDXL pipeline
 
 ### Phone
@@ -106,6 +108,14 @@ python scripts/download_adb.py
 # Experimental helper for the early SDXL stages
 python scripts/build_all.py --checkpoint path/to/model.safetensors
 ```
+
+There is also a careful beta wrapper for the currently documented flow:
+
+```powershell
+pwsh SDXL/run_end_to_end.ps1 -Checkpoint path/to/model.safetensors -ContextsDir path/to/context_binaries
+```
+
+That wrapper intentionally separates the reproducible early build stages from the still-beta runtime/deploy pieces.
 
 Or step by step:
 
@@ -276,7 +286,7 @@ Prompt ──▶│ CLIP-L ──┐                                            
 
 - **Resolution is fixed** at 1024×1024 — others need full re-conversion
 - **VAE FP16** slightly compresses color range -> percentile contrast stretching is applied
-- **CFG doubles the time** — UNet runs twice (cond + uncond) per step
+- **CFG > 1.0 is expensive here** — conditional + unconditional predictions are both needed; because the runtime uses a split UNet (`encoder` + `decoder`), naive CFG means four phone-side UNet subprocess calls per step. The current runtime batches part of that work better than before, but wall-clock time is still close to 2× versus the no-CFG path.
 - **Termux required** — Python runtime for `phone_generate.py`
 - **Android shared-storage access may need manual confirmation** — especially for APK use on Android 11+
 - Tested only on **OnePlus 13 (SM8750)**

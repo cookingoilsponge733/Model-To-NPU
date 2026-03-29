@@ -62,7 +62,7 @@ The live phone snapshot also contains files that are useful for development/debu
 - `htp_backend_ext_config_*.json`
 - `htp_backend_extensions_*.json`
 - `runtime_work_gen/`
-- helper shell scripts such as `tmp_gen_cfg35.sh`
+- helper shell scripts such as `run_cfg35.sh`, `run_seed15.sh`, and `run_test.sh`
 
 ## Why this file exists
 

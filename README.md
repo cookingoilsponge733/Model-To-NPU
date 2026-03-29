@@ -1,31 +1,90 @@
 # Model-to-NPU Pipeline for Snapdragon
 
 > [!WARNING]
-> This repository is currently undergoing repeated end-to-end re-validation.
-> The current layout and commands reflect the latest known working setup, but a clean full pass from export to final phone generation is still being re-checked.
+> This repository is still going through repeated end-to-end re-validation.
+> The public runtime path is real and working, but some build/conversion branches are still openly marked as beta or experimental.
+
+<p align="center">
+  <a href="README_EN.md"><img src="https://img.shields.io/badge/docs-English-0A66C2?style=for-the-badge" alt="English docs"></a>
+  <a href="README_RU.md"><img src="https://img.shields.io/badge/docs-Русский-1F883D?style=for-the-badge" alt="Russian docs"></a>
+  <a href="APK/README.md"><img src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android APK"></a>
+</p>
+
+<p align="center">
+  <a href="README_EN.md#requirements-for-the-current-sdxl-pipeline"><img src="https://img.shields.io/badge/Phone%20Python-3.13%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Phone Python 3.13+"></a>
+  <a href="README_EN.md#requirements-for-the-current-sdxl-pipeline"><img src="https://img.shields.io/badge/Host%20Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Host Python 3.10"></a>
+  <a href="README_EN.md#performance"><img src="https://img.shields.io/badge/Snapdragon-8%20Elite-5C2D91?style=for-the-badge" alt="Snapdragon 8 Elite"></a>
+  <a href="README_EN.md#architecture"><img src="https://img.shields.io/badge/QNN%20%2F%20QAIRT-Hexagon%20NPU-CB2E6D?style=for-the-badge" alt="QNN / QAIRT"></a>
+</p>
 
 Repository for **model-to-NPU pipelines** targeting Qualcomm Snapdragon devices.
 
-**Current implemented pipeline:** `SDXL/`
-
-## Choose your language
-
-- [English documentation](README_EN.md)
-- [Русская документация](README_RU.md)
+**Current implemented family:** `SDXL/`  
+**Current public beta result:** SDXL generation on a Snapdragon phone NPU with CLIP-L, CLIP-G, split UNet, VAE, Termux runtime, and an Android APK.
 
 ## Quick links
 
-- [`README_EN.md`](README_EN.md) — full English guide
-- [`README_RU.md`](README_RU.md) — полное руководство на русском
-- [`APK/README.md`](APK/README.md) — Android application notes
-- [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md) — live phone-side SDXL deployment example gathered over ADB
+- [English documentation](README_EN.md)
+- [Русская документация](README_RU.md)
+- [Android app notes](APK/README.md)
+- [Live phone-side layout example](examples/phone-sdxl-qnn-layout.md)
+- [SDXL script map (EN)](SDXL/SCRIPTS_OVERVIEW.md)
+- [SDXL script map (RU)](SDXL/SCRIPTS_OVERVIEW_RU.md)
+- [Current lessons learned](SDXL/LESSONS_LEARNED.md)
+
+## What this repo already demonstrates
+
+- SDXL can be pushed all the way to a **real Snapdragon phone NPU**;
+- the runtime is not just a benchmark stub — it includes prompt processing, scheduler logic, PNG output, and an APK UI;
+- the repository now openly separates:
+  - the **public beta runtime path**,
+  - the **build/export path**,
+  - and the **experimental lab scripts** used to debug QAIRT/QNN edge cases.
+
+## Gallery
+
+<p align="center">
+  <img src="1.png" alt="SDXL on phone sample 1" width="49%">
+  <img src="2.png" alt="SDXL on phone sample 2" width="49%">
+</p>
+<p align="center">
+  <img src="3.png" alt="SDXL on phone sample 3" width="49%">
+  <img src="4.png" alt="SDXL on phone sample 4" width="49%">
+</p>
+
+## Proof that it actually runs on-device
+
+<p align="center">
+  <img src="5.png" alt="Phone-side proof screenshot" width="88%">
+</p>
+
+## Why CFG is much slower here
+
+For this project, **CFG above 1.0 is not a tiny tweak**.
+
+- CFG means the model needs both **conditional** and **unconditional** predictions;
+- this repository uses a **split UNet** (`encoder` + `decoder`) on the phone;
+- so one logical UNet pass is already two QNN executions;
+- naive CFG therefore turns each denoising step into **four** phone-side UNet subprocess calls:
+  - uncond encoder,
+  - uncond decoder,
+  - cond encoder,
+  - cond decoder.
+
+The current phone runtime now batches cond+uncond work more efficiently, so it no longer pays the worst possible subprocess overhead every step. But the NPU still has to do roughly **double the real denoising work**, so generation time is still close to **2× slower** than the no-CFG path.
+
+In short:
+
+- **CFG = 1.0 or lower** → cheapest path;
+- **CFG > 1.0** → sharper/more guided output, but much more UNet work;
+- on this stack, that trade-off is very visible in wall-clock time.
 
 ## Current repository layout
 
-- `SDXL/` — current SDXL-specific conversion / build scripts
-- `APK/` — Android app for on-device generation
-- `scripts/` — deploy and helper scripts
-- `tokenizer/` — shared tokenizer files
-- `phone_generate.py` — standalone phone-side generator
+- `SDXL/` — SDXL conversion, calibration, verification, QNN, and runtime experiments;
+- `APK/` — Android app for on-device generation;
+- `scripts/` — deploy and helper scripts;
+- `tokenizer/` — shared tokenizer files;
+- `phone_generate.py` — standalone phone-side generator used by the public beta runtime path.
 
 If more model families are added later, each of them should get its own top-level folder alongside `SDXL/`.

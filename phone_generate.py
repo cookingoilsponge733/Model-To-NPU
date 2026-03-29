@@ -5,10 +5,9 @@ Runs entirely on phone: tokenizer + scheduler + QNN NPU inference.
 No PC, no torch, no diffusers required.
 
 Usage (in Termux):
-    export SDXL_QNN_BASE=/sdcard/Download/sdxl_qnn
-    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "1girl, anime, cherry blossoms"
-    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "cat on windowsill" --seed 777
-    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "dark castle" --cfg 2.0 --neg "blurry, bad"
+  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "1girl, anime, cherry blossoms"
+  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "cat on windowsill" --seed 777
+  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "dark castle" --cfg 2.0 --neg "blurry, bad"
 """
 import argparse
 import json
@@ -387,6 +386,9 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
     latents = latents * sched.init_noise_sigma
     total_unet_ms = 0
 
+    # Pre-create a single reusable work dir (avoids mkdir overhead per step)
+    _ensure_unet_workdirs(use_cfg)
+
     for si in range(steps):
         t = sched.timesteps[si]
         lat_in = sched.scale_model_input(latents, si)
@@ -394,12 +396,16 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
         print(f"  [UNet {si+1}/{steps}]", end=" ", flush=True)
 
         if use_cfg:
-            np_uncond, ms1 = _run_unet_split(lat_in, t, si, "uncond")
-            np_cond, ms2 = _run_unet_split(lat_in, t, si, "cond")
+            # Batched CFG: encoder runs cond+uncond in ONE subprocess call,
+            # decoder does the same — saves 2 subprocess launches per step.
+            np_cond, np_uncond, ms = _run_unet_split_cfg(
+                lat_in, t,
+                f"{WORK_DIR}/unet/cond",
+                f"{WORK_DIR}/unet/uncond",
+            )
             noise_pred = np_uncond + cfg_scale * (np_cond - np_uncond)
-            ms = ms1 + ms2
         else:
-            noise_pred, ms = _run_unet_split(lat_in, t, si, "cond")
+            noise_pred, ms = _run_unet_split(lat_in, t, 0, "cond")
 
         total_unet_ms += ms
         print(f"{ms:.0f}ms [{noise_pred.min():.2f}..{noise_pred.max():.2f}]")
@@ -452,68 +458,141 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
     return out_path
 
 
-def _run_unet_split(latent_np, timestep, step_idx, tag):
-    """Run split UNet (encoder + decoder) on NPU."""
-    sd = f"{WORK_DIR}/unet/{tag}/step_{step_idx:02d}"
-    os.makedirs(sd, exist_ok=True)
-    base = f"{WORK_DIR}/unet/{tag}"
+def _ensure_unet_workdirs(use_cfg):
+    """Pre-create all work directories so per-step mkdir is skipped."""
+    for tag in (["cond", "uncond"] if use_cfg else ["cond"]):
+        os.makedirs(f"{WORK_DIR}/unet/{tag}/out_enc", exist_ok=True)
+        os.makedirs(f"{WORK_DIR}/unet/{tag}/out_dec", exist_ok=True)
+    if use_cfg:
+        os.makedirs(f"{WORK_DIR}/unet/enc_batch", exist_ok=True)
+        os.makedirs(f"{WORK_DIR}/unet/dec_batch", exist_ok=True)
 
-    # Save sample
-    smp = latent_np.astype(np.float32)
-    smp.tofile(f"{sd}/smp.raw")
 
-    # Save timestep
-    ts = np.array([float(timestep)], dtype=np.float32)
-    ts.tofile(f"{sd}/ts.raw")
-
-    # ── Encoder ──
-    # Input order (confirmed empirically):
-    # [0] encoder_hidden_states, [1] timestep, [2] time_ids,
-    # [3] text_embeds, [4] sample
-    enc_entries = [
-        f"{base}/enc.raw",
-        f"{sd}/ts.raw",
-        f"{base}/tid.raw",
-        f"{base}/te.raw",
-        f"{sd}/smp.raw",
+def _enc_dec_inputs(base, smp_path, ts_path):
+    """Return (enc_entries, dec_entries_builder) for one condition."""
+    enc = [
+        f"{base}/enc.raw",   # [0] encoder_hidden_states
+        ts_path,              # [1] timestep
+        f"{base}/tid.raw",   # [2] time_ids
+        f"{base}/te.raw",    # [3] text_embeds
+        smp_path,             # [4] sample
     ]
-    with open(f"{sd}/il_enc.txt", "w") as f:
-        f.write(" ".join(enc_entries) + "\n")
+    return enc
 
-    ms_enc = qnn_run(CONTEXTS["encoder"], f"{sd}/il_enc.txt", f"{sd}/out_enc")
 
-    # ── Decoder ──
-    # Input order (confirmed empirically):
-    # [0] encoder_hidden_states, [1] mid_out, [2] skip_8,
-    # [3] temb, [4..11] skip_7→skip_0 (reversed)
-    enc_out = f"{sd}/out_enc/Result_0"
-    dec_entries = [
-        f"{base}/enc.raw",            # [0] encoder_hidden_states
-        f"{enc_out}/output_0.raw",     # [1] mid_out
-        f"{enc_out}/output_9.raw",     # [2] skip_8
-        f"{enc_out}/output_10.raw",    # [3] temb
+def _dec_entries_from_enc_out(base, enc_out_dir):
+    """Build decoder input list from encoder output directory."""
+    dec = [
+        f"{base}/enc.raw",               # [0] encoder_hidden_states
+        f"{enc_out_dir}/output_0.raw",    # [1] mid_out
+        f"{enc_out_dir}/output_9.raw",    # [2] skip_8
+        f"{enc_out_dir}/output_10.raw",   # [3] temb
     ]
     for i in range(8, 0, -1):
-        dec_entries.append(f"{enc_out}/output_{i}.raw")  # skip_7→skip_0
+        dec.append(f"{enc_out_dir}/output_{i}.raw")  # skip_7→skip_0
+    return dec
 
-    with open(f"{sd}/il_dec.txt", "w") as f:
-        f.write(" ".join(dec_entries) + "\n")
 
-    ms_dec = qnn_run(CONTEXTS["decoder"], f"{sd}/il_dec.txt", f"{sd}/out_dec")
-
-    # Read output — NCHW format
-    out_path = f"{sd}/out_dec/Result_0/output_0.raw"
+def _read_noise_pred(out_dec_dir, result_idx=0):
+    """Read decoder noise_pred output (auto-detect float32/float16)."""
+    out_path = f"{out_dec_dir}/Result_{result_idx}/output_0.raw"
     raw_bytes = os.path.getsize(out_path)
-    expected_f32 = 1 * 4 * 128 * 128 * 4  # float32
-    expected_f16 = 1 * 4 * 128 * 128 * 2  # float16
+    expected_f32 = 1 * 4 * 128 * 128 * 4
+    expected_f16 = 1 * 4 * 128 * 128 * 2
     if raw_bytes == expected_f32:
         d = np.fromfile(out_path, np.float32)
     elif raw_bytes == expected_f16:
         d = np.fromfile(out_path, np.float16).astype(np.float32)
     else:
-        raise ValueError(f"Decoder output: unexpected {raw_bytes} bytes")
+        raise ValueError(f"Decoder output: unexpected {raw_bytes} bytes at {out_path}")
+    return d.reshape(1, 4, 128, 128)
 
-    return d.reshape(1, 4, 128, 128), ms_enc + ms_dec
+
+def _run_unet_split(latent_np, timestep, step_idx, tag):
+    """Run split UNet (encoder + decoder) on NPU — single condition."""
+    # Reuse a fixed work dir (step_idx ignored — files overwritten each step)
+    base = f"{WORK_DIR}/unet/{tag}"
+    enc_out = f"{base}/out_enc"
+    dec_out = f"{base}/out_dec"
+    os.makedirs(enc_out, exist_ok=True)
+    os.makedirs(dec_out, exist_ok=True)
+
+    smp_path = f"{base}/smp.raw"
+    ts_path = f"{base}/ts.raw"
+
+    latent_np.astype(np.float32).tofile(smp_path)
+    np.array([float(timestep)], dtype=np.float32).tofile(ts_path)
+
+    enc_entries = _enc_dec_inputs(base, smp_path, ts_path)
+    il_enc = f"{base}/il_enc.txt"
+    with open(il_enc, "w") as f:
+        f.write(" ".join(enc_entries) + "\n")
+
+    ms_enc = qnn_run(CONTEXTS["encoder"], il_enc, enc_out)
+
+    dec_entries = _dec_entries_from_enc_out(base, f"{enc_out}/Result_0")
+    il_dec = f"{base}/il_dec.txt"
+    with open(il_dec, "w") as f:
+        f.write(" ".join(dec_entries) + "\n")
+
+    ms_dec = qnn_run(CONTEXTS["decoder"], il_dec, dec_out)
+
+    return _read_noise_pred(dec_out, 0), ms_enc + ms_dec
+
+
+def _run_unet_split_cfg(latent_np, timestep, cond_base, uncond_base):
+    """Optimized CFG: run cond+uncond as 2-line input_list in ONE subprocess each.
+
+    Instead of 4 qnn-net-run calls, we make 2:
+      - encoder: processes uncond then cond in one process
+      - decoder: same
+    Outputs land in Result_0/ (uncond) and Result_1/ (cond).
+    """
+    # Common files (same latent/timestep for both conditions)
+    smp_path = f"{cond_base}/smp.raw"
+    ts_path = f"{cond_base}/ts.raw"
+    smp_np = latent_np.astype(np.float32)
+    ts_np = np.array([float(timestep)], dtype=np.float32)
+    smp_np.tofile(smp_path)
+    ts_np.tofile(ts_path)
+    # uncond uses the same values — write them there too
+    smp_np.tofile(f"{uncond_base}/smp.raw")
+    ts_np.tofile(f"{uncond_base}/ts.raw")
+
+    enc_out_batch = f"{WORK_DIR}/unet/enc_batch"
+    dec_out_batch = f"{WORK_DIR}/unet/dec_batch"
+    os.makedirs(enc_out_batch, exist_ok=True)
+    os.makedirs(dec_out_batch, exist_ok=True)
+
+    # ── Batched Encoder: 2 inferences in one qnn-net-run ──
+    # Line 0 → uncond (Result_0), Line 1 → cond (Result_1)
+    enc_uncond = _enc_dec_inputs(uncond_base, f"{uncond_base}/smp.raw", ts_path)
+    enc_cond = _enc_dec_inputs(cond_base, smp_path, ts_path)
+
+    il_enc_batch = f"{cond_base}/il_enc_batch.txt"
+    with open(il_enc_batch, "w") as f:
+        f.write(" ".join(enc_uncond) + "\n")
+        f.write(" ".join(enc_cond) + "\n")
+
+    # Single shared output dir; Result_0 = uncond, Result_1 = cond
+    ms_enc = qnn_run(CONTEXTS["encoder"], il_enc_batch, enc_out_batch)
+
+    # ── Batched Decoder: 2 inferences in one qnn-net-run ──
+    dec_uncond = _dec_entries_from_enc_out(uncond_base, f"{enc_out_batch}/Result_0")
+    dec_cond = _dec_entries_from_enc_out(cond_base, f"{enc_out_batch}/Result_1")
+
+    il_dec_batch = f"{cond_base}/il_dec_batch.txt"
+    with open(il_dec_batch, "w") as f:
+        f.write(" ".join(dec_uncond) + "\n")
+        f.write(" ".join(dec_cond) + "\n")
+
+    dec_out_batch = f"{WORK_DIR}/unet/dec_batch"
+    ms_dec = qnn_run(CONTEXTS["decoder"], il_dec_batch, dec_out_batch)
+
+    np_cond = _read_noise_pred(dec_out_batch, 1)
+    np_uncond = _read_noise_pred(dec_out_batch, 0)
+
+    return np_cond, np_uncond, ms_enc + ms_dec
 
 
 # ─── CLI ───

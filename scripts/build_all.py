@@ -17,6 +17,7 @@ Usage:
 """
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,37 @@ def run(cmd, cwd=None):
     print(f"[RUN] {' '.join(str(c) for c in cmd)}")
     print(f"{'='*60}")
     subprocess.check_call([str(c) for c in cmd], cwd=str(cwd or ROOT))
+
+
+def ensure_tmp_lightning_pipeline(diffusers_dir: Path, merged_dir: Path, tmp_pipeline: Path):
+    """Create a minimal temp pipeline that reuses the merged Lightning UNet."""
+    unet_dir = tmp_pipeline / "unet"
+    unet_dir.mkdir(parents=True, exist_ok=True)
+
+    config_src = merged_dir / "config.json"
+    config_dst = unet_dir / "config.json"
+    if config_src.exists() and not config_dst.exists():
+        shutil.copy2(config_src, config_dst)
+
+    weights_src = merged_dir / "diffusion_pytorch_model.safetensors"
+    weights_dst = unet_dir / "diffusion_pytorch_model.safetensors"
+    if weights_src.exists() and not weights_dst.exists():
+        try:
+            os.link(weights_src, weights_dst)
+        except OSError:
+            shutil.copy2(weights_src, weights_dst)
+
+    for name in ("scheduler", "text_encoder", "text_encoder_2", "tokenizer", "tokenizer_2", "vae"):
+        src = diffusers_dir / name
+        dst = tmp_pipeline / name
+        if src.exists() and not dst.exists():
+            try:
+                os.symlink(src, dst, target_is_directory=True)
+            except OSError:
+                if src.is_dir():
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
 
 
 def check_prereqs():
@@ -167,11 +199,13 @@ def main():
     onnx_unet = out / "onnx_unet"
     if not onnx_unet.exists():
         print("\n[Step 4/6] Exporting UNet to ONNX (extmaps surgery)...")
+        tmp_pipeline = out / "_tmp_lightning_pipeline"
+        ensure_tmp_lightning_pipeline(diffusers_dir, merged_dir, tmp_pipeline)
         run([
             sys.executable,
             SDXL_DIR / "export_sdxl_to_onnx.py",
             "--diffusers-dir",
-            str(diffusers_dir),
+            str(tmp_pipeline),
             "--out-dir",
             str(onnx_unet),
             "--component",
