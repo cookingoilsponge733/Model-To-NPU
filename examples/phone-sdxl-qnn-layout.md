@@ -2,6 +2,8 @@
 
 This file documents a **real directory snapshot** collected on **2026-03-29** from a connected phone via `adb shell su -c ...`.
 
+It reflects a **historical rooted deployment layout**. The current default deploy target documented in the repository is `/sdcard/Download/sdxl_qnn`.
+
 It is included as an example of what the toolchain has already produced on-device.  
 Large binaries are **not** stored in the repository; this file is an inventory/reference only.
 

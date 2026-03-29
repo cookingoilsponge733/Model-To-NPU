@@ -2,7 +2,9 @@ package com.sdxlnpu.app;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.view.MenuItem;
 import android.widget.Toast;
 
@@ -11,8 +13,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.File;
 
 /**
  * Settings for model paths and phone-side configuration.
@@ -24,8 +25,8 @@ public class SettingsActivity extends AppCompatActivity {
     public static final String PREFS_NAME = "sdxl_npu_prefs";
     public static final String KEY_BASE_DIR = "base_dir";
     public static final String KEY_PYTHON_PATH = "python_path";
-    public static final String DEFAULT_BASE_DIR = "/data/local/tmp/sdxl_qnn";
-    public static final String DEFAULT_PYTHON = "/data/data/com.termux/files/usr/bin/python3";
+    public static final String DEFAULT_BASE_DIR = "/sdcard/Download/sdxl_qnn";
+    public static final String DEFAULT_PYTHON = "python3";
 
     private TextInputEditText baseDirInput;
     private TextInputEditText pythonPathInput;
@@ -106,37 +107,26 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
-        // Check via su if the directory and key files exist
+        File base = new File(baseDir);
+        File contextDir = new File(base, "context");
+        File generator = new File(base, "phone_gen/generate.py");
+        File tokenizerDir = new File(base, "phone_gen/tokenizer");
+        File qnnLib = new File(base, "lib/libQnnHtp.so");
+        File qnnRunner = new File(base, "bin/qnn-net-run");
+
         StringBuilder report = new StringBuilder();
-        try {
-            String suBin = findSu();
-            String checkScript =
-                "ls -la " + baseDir + "/context/ 2>&1 | head -20\n" +
-                "echo '---'\n" +
-                "ls -la " + baseDir + "/phone_gen/generate.py 2>&1\n" +
-                "echo '---'\n" +
-                "ls -la " + baseDir + "/phone_gen/tokenizer/ 2>&1\n" +
-                "echo '---'\n" +
-                "ls -la " + baseDir + "/lib/libQnnHtp.so 2>&1\n" +
-                "echo '---'\n" +
-                "ls -la " + baseDir + "/bin/qnn-net-run 2>&1\n";
-
-            ProcessBuilder pb = new ProcessBuilder(suBin, "--mount-master");
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            p.getOutputStream().write(checkScript.getBytes("UTF-8"));
-            p.getOutputStream().close();
-
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(p.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                report.append(line).append("\n");
-            }
-            p.waitFor();
-        } catch (Exception e) {
-            report.append("Ошибка: ").append(e.getMessage());
+        report.append("Base dir: ").append(baseDir).append("\n\n");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            report.append("All files access: ")
+                .append(Environment.isExternalStorageManager() ? "granted" : "missing")
+                .append("\n\n");
         }
+
+        appendCheck(report, "context/", contextDir.isDirectory(), contextDir.getAbsolutePath());
+        appendCheck(report, "phone_gen/generate.py", generator.isFile(), generator.getAbsolutePath());
+        appendCheck(report, "phone_gen/tokenizer/", tokenizerDir.isDirectory(), tokenizerDir.getAbsolutePath());
+        appendCheck(report, "lib/libQnnHtp.so", qnnLib.isFile(), qnnLib.getAbsolutePath());
+        appendCheck(report, "bin/qnn-net-run", qnnRunner.isFile(), qnnRunner.getAbsolutePath());
 
         // Show results
         new android.app.AlertDialog.Builder(this)
@@ -146,13 +136,11 @@ public class SettingsActivity extends AppCompatActivity {
             .show();
     }
 
-    private static String findSu() {
-        for (String path : new String[]{
-            "/product/bin/su", "/sbin/su", "/system/xbin/su",
-            "/system/bin/su", "/su/bin/su", "/data/adb/magisk/su"
-        }) {
-            if (new java.io.File(path).exists()) return path;
-        }
-        return "su";
+    private static void appendCheck(StringBuilder report, String label, boolean ok, String path) {
+        report.append(ok ? "OK   " : "MISS ")
+            .append(label)
+            .append("\n    ")
+            .append(path)
+            .append("\n\n");
     }
 }

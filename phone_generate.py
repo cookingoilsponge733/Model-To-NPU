@@ -5,9 +5,10 @@ Runs entirely on phone: tokenizer + scheduler + QNN NPU inference.
 No PC, no torch, no diffusers required.
 
 Usage (in Termux):
-  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "1girl, anime, cherry blossoms"
-  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "cat on windowsill" --seed 777
-  python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "dark castle" --cfg 2.0 --neg "blurry, bad"
+    export SDXL_QNN_BASE=/sdcard/Download/sdxl_qnn
+    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "1girl, anime, cherry blossoms"
+    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "cat on windowsill" --seed 777
+    python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "dark castle" --cfg 2.0 --neg "blurry, bad"
 """
 import argparse
 import json
@@ -22,7 +23,27 @@ import time
 import numpy as np
 
 # ─── Paths ───
-DR = "/data/local/tmp/sdxl_qnn"
+DEFAULT_BASE_DIR = "/sdcard/Download/sdxl_qnn"
+LEGACY_BASE_DIR = "/data/local/tmp/sdxl_qnn"
+
+
+def _resolve_base_dir():
+    override = os.environ.get("SDXL_QNN_BASE")
+    if override:
+        return override
+
+    candidates = [
+        DEFAULT_BASE_DIR,
+        "/storage/emulated/0/Download/sdxl_qnn",
+        LEGACY_BASE_DIR,
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return DEFAULT_BASE_DIR
+
+
+DR = _resolve_base_dir()
 CONTEXTS = {
     "clip_l": f"{DR}/context/clip_l.serialized.bin.bin",
     "clip_g": f"{DR}/context/clip_g.serialized.bin.bin",
@@ -31,10 +52,12 @@ CONTEXTS = {
     "vae": f"{DR}/context/vae_decoder.serialized.bin.bin",
 }
 TOKENIZER_DIR = f"{DR}/phone_gen/tokenizer"
-OUTPUT_DIR = f"{DR}/outputs"
-WORK_DIR = f"{DR}/phone_gen/work"
-QNN_NET_RUN = f"{DR}/bin/qnn-net-run"
-QNN_LIB = f"{DR}/lib"
+OUTPUT_DIR = os.environ.get("SDXL_QNN_OUTPUT_DIR", f"{DR}/outputs")
+WORK_DIR = os.environ.get("SDXL_QNN_WORK_DIR", f"{DR}/phone_gen/work")
+QNN_NET_RUN = os.environ.get("SDXL_QNN_NET_RUN", f"{DR}/bin/qnn-net-run")
+QNN_BIN_DIR = os.environ.get("SDXL_QNN_BIN_DIR", os.path.dirname(QNN_NET_RUN))
+QNN_LIB = os.environ.get("SDXL_QNN_LIB_DIR", f"{DR}/lib")
+QNN_MODEL_DIR = os.environ.get("SDXL_QNN_MODEL_DIR", f"{DR}/model")
 
 # ─── CLIP BPE Tokenizer (pure Python, no dependencies) ───
 
@@ -183,8 +206,8 @@ class EulerDiscreteScheduler:
         # Precompute sigmas for all timesteps
         self._all_sigmas = ((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5
 
-        self.timesteps = None
-        self.sigmas = None
+        self.timesteps = np.array([], dtype=np.int64)
+        self.sigmas = np.array([], dtype=np.float32)
         self.init_noise_sigma = 1.0
 
     def set_timesteps(self, num_steps):
@@ -230,7 +253,7 @@ def qnn_run(ctx_path, input_list_path, output_dir, native=False):
     os.makedirs(output_dir, exist_ok=True)
     nf = "--use_native_output_files " if native else ""
     env = (
-        f"export LD_LIBRARY_PATH={QNN_LIB}:{DR}/bin:{DR}/model:$LD_LIBRARY_PATH && "
+        f"export LD_LIBRARY_PATH={QNN_LIB}:{QNN_BIN_DIR}:{QNN_MODEL_DIR}:$LD_LIBRARY_PATH && "
         f"export ADSP_LIBRARY_PATH='{QNN_LIB};/vendor/lib64/rfs/dsp;"
         f"/vendor/lib/rfsa/adsp;/vendor/dsp' && "
     )
@@ -268,6 +291,7 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
         neg_prompt = DEFAULT_NEG if use_cfg else ""
 
     print(f"Prompt: {prompt}")
+    print(f"Base:   {DR}")
     if use_cfg:
         print(f"Neg:    {neg_prompt[:80]}{'...' if len(neg_prompt) > 80 else ''}")
     print(f"Seed: {seed}, Steps: {steps}, CFG: {cfg_scale}")
@@ -325,6 +349,8 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
     pe_cond, te_cond, ms_l, ms_g = run_clip(prompt, "cond")
     print(f"L={ms_l:.0f}ms G={ms_g:.0f}ms")
     ms_clip = ms_l + ms_g
+    pe_uncond = None
+    te_uncond = None
 
     if use_cfg:
         print("[CLIP uncond]", end=" ", flush=True)
@@ -351,6 +377,7 @@ def generate(prompt, seed=42, steps=8, cfg_scale=3.5, neg_prompt=None,
 
     push_unet_data(pe_cond, te_cond, "cond")
     if use_cfg:
+        assert pe_uncond is not None and te_uncond is not None
         push_unet_data(pe_uncond, te_uncond, "uncond")
 
     # ── 3. Denoise loop ──

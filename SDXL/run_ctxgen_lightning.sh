@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # Generate HTP context binary for Lightning UNet model
 
-BASE=/data/local/tmp/sdxl_qnn
+BASE=${SDXL_QNN_BASE:-/sdcard/Download/sdxl_qnn}
 MODEL_LIB=$BASE/model/libunet_lightning8step.so
 CONFIG=$BASE/htp_backend_extensions_lightning.json
 OUTPUT=$BASE/context/unet_lightning8step.serialized.bin

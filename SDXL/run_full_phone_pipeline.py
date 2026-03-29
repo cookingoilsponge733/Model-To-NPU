@@ -26,7 +26,7 @@ from export_sdxl_to_onnx import (
 DIFFUSERS_DIR = SDXL_NPU / "diffusers_pipeline"
 MERGED_UNET_DIR = SDXL_NPU / "unet_lightning8step_merged"
 ADB = str(ROOT / "adb.exe")
-DEVICE_ROOT = "/data/local/tmp/sdxl_qnn"
+DEVICE_ROOT = os.environ.get("SDXL_QNN_BASE", "/sdcard/Download/sdxl_qnn")
 OUTPUT_DIR = ROOT / "NPU" / "outputs"
 
 # Context binaries on phone

@@ -17,16 +17,7 @@ import sys
 import time
 
 
-PHONE_BASE = "/data/local/tmp/sdxl_qnn"
-PHONE_DIRS = [
-    f"{PHONE_BASE}/context",
-    f"{PHONE_BASE}/phone_gen/tokenizer",
-    f"{PHONE_BASE}/phone_gen/work",
-    f"{PHONE_BASE}/lib",
-    f"{PHONE_BASE}/bin",
-    f"{PHONE_BASE}/model",
-    f"{PHONE_BASE}/outputs",
-]
+DEFAULT_PHONE_BASE = "/sdcard/Download/sdxl_qnn"
 
 # Expected context binary files
 CONTEXT_FILES = [
@@ -47,6 +38,18 @@ QNN_LIBS = [
     "libQnnHtpPrepare.so",
     "libQnnHtpProfilingReader.so",
 ]
+
+
+def phone_dirs(phone_base):
+    return [
+        f"{phone_base}/context",
+        f"{phone_base}/phone_gen/tokenizer",
+        f"{phone_base}/phone_gen/work",
+        f"{phone_base}/lib",
+        f"{phone_base}/bin",
+        f"{phone_base}/model",
+        f"{phone_base}/outputs",
+    ]
 
 
 def adb_cmd(adb_path, serial, *args):
@@ -101,6 +104,8 @@ def main():
                         help="ADB device serial")
     parser.add_argument("--contexts-dir", type=str, required=True,
                         help="Directory containing context binary files")
+    parser.add_argument("--phone-base", type=str, default=DEFAULT_PHONE_BASE,
+                        help="Phone-side deploy directory (default: /sdcard/Download/sdxl_qnn)")
     parser.add_argument("--qnn-lib-dir", type=str, default=None,
                         help="Directory containing QNN .so runtime libs")
     parser.add_argument("--qnn-bin-dir", type=str, default=None,
@@ -127,11 +132,12 @@ def main():
         print("ERROR: No device connected")
         sys.exit(1)
     serial = args.serial or devices[0]
+    phone_base = args.phone_base.rstrip("/")
     print(f"Device: {serial}")
 
     # Create directories on phone
     print("\n[1/5] Creating directories...")
-    for d in PHONE_DIRS:
+    for d in phone_dirs(phone_base):
         adb_cmd(adb, serial, "shell", f"mkdir -p {d}")
 
     # Push context binaries
@@ -144,7 +150,7 @@ def main():
         for f in CONTEXT_FILES:
             local = os.path.join(ctx_dir, f)
             if os.path.exists(local):
-                adb_push(adb, serial, local, f"{PHONE_BASE}/context/{f}")
+                adb_push(adb, serial, local, f"{phone_base}/context/{f}")
             else:
                 print(f"  SKIP {f} (not found)")
     else:
@@ -156,7 +162,7 @@ def main():
         for lib in QNN_LIBS:
             local = os.path.join(args.qnn_lib_dir, lib)
             if os.path.exists(local):
-                adb_push(adb, serial, local, f"{PHONE_BASE}/lib/{lib}")
+                adb_push(adb, serial, local, f"{phone_base}/lib/{lib}")
             else:
                 print(f"  SKIP {lib} (not found)")
 
@@ -164,8 +170,8 @@ def main():
         if args.qnn_bin_dir:
             qnr = os.path.join(args.qnn_bin_dir, "qnn-net-run")
             if os.path.exists(qnr):
-                adb_push(adb, serial, qnr, f"{PHONE_BASE}/bin/qnn-net-run")
-                adb_cmd(adb, serial, "shell", f"chmod 755 {PHONE_BASE}/bin/qnn-net-run")
+                adb_push(adb, serial, qnr, f"{phone_base}/bin/qnn-net-run")
+                adb_cmd(adb, serial, "shell", f"chmod 755 {phone_base}/bin/qnn-net-run")
     else:
         print("\n[3/5] Skipping QNN libs (use --qnn-lib-dir)")
 
@@ -175,7 +181,7 @@ def main():
 
     gen_py = os.path.join(repo_root, "phone_generate.py")
     if os.path.exists(gen_py):
-        adb_push(adb, serial, gen_py, f"{PHONE_BASE}/phone_gen/generate.py")
+        adb_push(adb, serial, gen_py, f"{phone_base}/phone_gen/generate.py")
     else:
         print(f"  ERROR: {gen_py} not found")
 
@@ -183,13 +189,26 @@ def main():
     for f in ["vocab.json", "merges.txt"]:
         local = os.path.join(tok_dir, f)
         if os.path.exists(local):
-            adb_push(adb, serial, local, f"{PHONE_BASE}/phone_gen/tokenizer/{f}")
+            adb_push(adb, serial, local, f"{phone_base}/phone_gen/tokenizer/{f}")
         else:
             print(f"  ERROR: {local} not found")
 
+    extra_files = [
+        (os.path.join(repo_root, "SDXL", "run_ctxgen_lightning.sh"), f"{phone_base}/run_ctxgen_lightning.sh", True),
+        (os.path.join(repo_root, "SDXL", "htp_backend_extensions_lightning.json"), f"{phone_base}/htp_backend_extensions_lightning.json", False),
+        (os.path.join(repo_root, "SDXL", "htp_backend_ext_config_lightning.json"), f"{phone_base}/htp_backend_ext_config_lightning.json", False),
+    ]
+    for local, remote, make_executable in extra_files:
+        if os.path.exists(local):
+            adb_push(adb, serial, local, remote)
+            if make_executable:
+                adb_cmd(adb, serial, "shell", f"chmod 755 {remote}")
+        else:
+            print(f"  SKIP {os.path.basename(local)} (not found)")
+
     # Verify deployment
     print("\n[5/5] Verifying...")
-    rc, out, _ = adb_cmd(adb, serial, "shell", f"ls -la {PHONE_BASE}/context/ 2>/dev/null")
+    rc, out, _ = adb_cmd(adb, serial, "shell", f"ls -la {phone_base}/context/ 2>/dev/null")
     if rc == 0:
         print("  Context binaries:")
         for line in out.strip().split("\n"):
@@ -197,8 +216,8 @@ def main():
                 print(f"    {line.strip()}")
 
     rc, out, _ = adb_cmd(adb, serial, "shell",
-                         f"ls -la {PHONE_BASE}/phone_gen/generate.py "
-                         f"{PHONE_BASE}/phone_gen/tokenizer/ 2>/dev/null")
+                         f"ls -la {phone_base}/phone_gen/generate.py "
+                         f"{phone_base}/phone_gen/tokenizer/ 2>/dev/null")
     if rc == 0:
         print("  Phone generator:")
         for line in out.strip().split("\n"):
@@ -206,16 +225,16 @@ def main():
 
     # Quick sanity check
     rc, out, _ = adb_cmd(adb, serial, "shell",
-                         f"du -sh {PHONE_BASE}/ 2>/dev/null")
+                         f"du -sh {phone_base}/ 2>/dev/null")
     if rc == 0:
         print(f"\n  Total on phone: {out.strip()}")
 
     print("\nDeployment complete!")
-    print(f"Models are in:  {PHONE_BASE}/context/")
-    print(f"Generator in:   {PHONE_BASE}/phone_gen/generate.py")
-    print(f"\nTo test: adb shell 'su --mount-master -c "
-          f"\"export PATH=/data/data/com.termux/files/usr/bin:\\$PATH && "
-          f"python3 {PHONE_BASE}/phone_gen/generate.py \\\"hello world\\\"\"'")
+    print(f"Models are in:  {phone_base}/context/")
+    print(f"Generator in:   {phone_base}/phone_gen/generate.py")
+    print(f"\nTo test: adb shell 'export PATH=/data/data/com.termux/files/usr/bin:$PATH && "
+          f"export SDXL_QNN_BASE={phone_base} && "
+          f"python3 {phone_base}/phone_gen/generate.py \"hello world\"'")
 
 
 if __name__ == "__main__":

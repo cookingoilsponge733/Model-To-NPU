@@ -4,11 +4,13 @@ import android.content.ContentValues;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -42,7 +44,8 @@ import java.util.regex.Pattern;
 /**
  * SDXL Lightning on Qualcomm NPU — standalone phone generation.
  *
- * Calls phone_generate.py (Termux Python) via su, parses stdout for progress,
+ * Calls phone_generate.py through a regular shell and configurable Python command,
+ * parses stdout for progress,
  * loads the resulting PNG and displays it. No JNI, no PC required.
  */
 public class MainActivity extends AppCompatActivity {
@@ -144,6 +147,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkPrerequisites() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            statusText.setText("Нужен доступ ко всем файлам для чтения " + BASE_DIR +
+                "\nНажмите Generate или откройте системное разрешение вручную");
+            return;
+        }
         File ctx = new File(BASE_DIR, "context");
         if (!ctx.exists()) {
             statusText.setText("Модели не найдены в " + BASE_DIR +
@@ -180,6 +188,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startGeneration() {
+        if (!ensureExternalStorageAccess()) {
+            return;
+        }
+
         String prompt = promptInput.getText().toString().trim();
         if (prompt.isEmpty()) {
             Toast.makeText(this, "Введите промпт", Toast.LENGTH_SHORT).show();
@@ -244,16 +256,22 @@ public class MainActivity extends AppCompatActivity {
     private void runPipeline(String prompt, long seed, int steps,
                              float cfg, String neg, boolean stretch,
                              String outName) throws IOException, InterruptedException {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            throw new IOException("Нет доступа к общей папке Downloads. Выдайте приложению доступ ко всем файлам.");
+        }
+
         // Build shell script (multi-line — no nested-quote issues)
         StringBuilder script = new StringBuilder();
-        script.append("export PATH=/data/data/com.termux/files/usr/bin:$PATH\n");
+        script.append("export PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/applets:$PATH\n");
+        script.append("export SDXL_QNN_BASE=\"").append(shellEscape(BASE_DIR)).append("\"\n");
         script.append(String.format(Locale.US,
-            "export LD_LIBRARY_PATH=%s/lib:%s/bin:$LD_LIBRARY_PATH\n", BASE_DIR, BASE_DIR));
+            "export LD_LIBRARY_PATH=\"%s/lib:%s/bin:%s/model:$LD_LIBRARY_PATH\"\n",
+            shellEscape(BASE_DIR), shellEscape(BASE_DIR), shellEscape(BASE_DIR)));
         script.append(String.format(Locale.US,
-            "export ADSP_LIBRARY_PATH=\"%s/lib;/vendor/lib64/rfs/dsp;/vendor/lib/rfsa/adsp;/vendor/dsp\"\n", BASE_DIR));
-        script.append("cd ").append(BASE_DIR).append("\n");
+            "export ADSP_LIBRARY_PATH=\"%s/lib;/vendor/lib64/rfs/dsp;/vendor/lib/rfsa/adsp;/vendor/dsp\"\n", shellEscape(BASE_DIR)));
+        script.append("cd \"").append(shellEscape(BASE_DIR)).append("\"\n");
 
-        script.append(PYTHON).append(" ").append(GEN_SCRIPT);
+        script.append("\"").append(shellEscape(PYTHON)).append("\" \"").append(shellEscape(GEN_SCRIPT)).append("\"");
         script.append(" \"").append(shellEscape(prompt)).append("\"");
         script.append(" --seed ").append(seed);
         script.append(" --steps ").append(steps);
@@ -271,16 +289,12 @@ public class MainActivity extends AppCompatActivity {
 
         updateStatus("Запуск...", 2);
 
-        // Find su and launch root shell in global mount namespace
-        // --mount-master is needed because app runs in isolated mount namespace
-        // where /data/data/com.termux/ is not visible
-        String suBin = findSu();
-        ProcessBuilder pb = new ProcessBuilder(suBin, "--mount-master");
+        ProcessBuilder pb = new ProcessBuilder("/system/bin/sh");
         pb.redirectErrorStream(true);
         Process process = pb.start();
         currentProcess = process;
 
-        // Write script to su stdin — avoids all quoting problems
+        // Write script to shell stdin — avoids quoting problems
         try (OutputStream os = process.getOutputStream()) {
             os.write(script.toString().getBytes("UTF-8"));
             os.flush();
@@ -362,9 +376,9 @@ public class MainActivity extends AppCompatActivity {
         if (exitCode != 0 && savedPath == null) {
             String hint;
             if (exitCode == 127) {
-                hint = "Команда не найдена (код 127).\nПроверьте: установлен ли Termux с Python3?";
-            } else if (exitCode == 1 || exitCode == 13) {
-                hint = "Root-доступ не предоставлен.\nОткройте Magisk и разрешите root для SDXL NPU.";
+                hint = "Команда не найдена (код 127).\nПроверьте путь/команду Python в Настройках.";
+            } else if (exitCode == 1 || exitCode == 13 || exitCode == 126) {
+                hint = "Нет доступа к файлам или исполняемым компонентам.\nПроверьте путь к Downloads и команду Python в Настройках.";
             } else {
                 hint = "Генерация завершилась с ошибкой (код " + exitCode + ")";
             }
@@ -410,16 +424,24 @@ public class MainActivity extends AppCompatActivity {
                 .replace("`", "\\`");
     }
 
-    /** Find su binary (Magisk / KernelSU / other root solutions) */
-    private static String findSu() {
-        for (String path : new String[]{
-            "/product/bin/su",
-            "/sbin/su", "/system/xbin/su", "/system/bin/su",
-            "/su/bin/su", "/data/adb/magisk/su"
-        }) {
-            if (new java.io.File(path).exists()) return path;
+    private boolean ensureExternalStorageAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            try {
+                Intent intent = new Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception ignored) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                startActivity(intent);
+            }
+            Toast.makeText(this,
+                "Разрешите доступ ко всем файлам для работы с папкой Downloads",
+                Toast.LENGTH_LONG).show();
+            statusText.setText("Ожидается разрешение на доступ ко всем файлам");
+            return false;
         }
-        return "su"; // fallback: try PATH
+        return true;
     }
 
     private void saveImage() {

@@ -107,7 +107,7 @@ gets garbage → gray monochrome images with correct dynamic range but no prompt
 Without it, `qnn-context-binary-generator` and `qnn-net-run` fail with
 "Device Creation failure". Must include:
 ```bash
-export ADSP_LIBRARY_PATH='/data/local/tmp/sdxl_qnn/lib;/vendor/lib64/rfs/dsp;/vendor/lib/rfsa/adsp;/vendor/dsp'
+export ADSP_LIBRARY_PATH='/sdcard/Download/sdxl_qnn/lib;/vendor/lib64/rfs/dsp;/vendor/lib/rfsa/adsp;/vendor/dsp'
 ```
 
 ### `qnn-net-run --model` hangs on full UNet

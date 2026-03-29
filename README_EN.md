@@ -24,7 +24,7 @@ This repository is intended to grow into a home for multiple **model-specific pi
 
 Right now the implemented and documented pipeline is **Stable Diffusion XL** running **natively on the phone NPU** (Hexagon HTP). The working SDXL path uses CLIP-L, CLIP-G, Split UNet (encoder + decoder), and VAE on the device.
 
-**Current tested model combination:** [WAI Illustrious SDXL v1.60](https://civitai.com/models/795765/wai-illustrious-sdxl) + [SDXL-Lightning 8-step LoRA](https://huggingface.co/ByteDance/SDXL-Lightning) (ByteDance)
+**Current tested model combination:** [WAI Illustrious SDXL v1.60](https://civitai.com/models/827184/wai-illustrious-sdxl?modelVersionId=2514310) + [SDXL-Lightning 8-step LoRA](https://huggingface.co/ByteDance/SDXL-Lightning) (ByteDance)
 
 > **Scope note:** the repo structure is broader than SDXL, but the actually validated pipeline in this repo is still SDXL-first.
 
@@ -46,9 +46,9 @@ For a live example of what a deployed phone-side SDXL directory currently looks 
 | --------- | ----------- |
 | **SoC** | Qualcomm Snapdragon 8 Elite (SM8750) or QNN HTP compatible |
 | **RAM** | 16 GB (peak ~12 GB, need >= 6 GB free) |
-| **Storage** | ~10 GB for models and context binaries |
-| **Root** | Magisk (for `su --mount-master` and QNN runtime access) |
-| **Termux** | Python 3.13+, numpy, Pillow |
+| **Storage** | ~10 GB for models and context binaries in a shared phone path such as `/sdcard/Download/sdxl_qnn` |
+| **Root** | Not required for the current default layout |
+| **Termux** | Python 3.13+, numpy, Pillow, `termux-setup-storage` |
 
 ### PC (for building the current pipeline)
 
@@ -131,6 +131,7 @@ python SDXL/build_android_model_lib_windows.py
 ```bash
 python scripts/deploy_to_phone.py \
   --contexts-dir /path/to/context_binaries \
+  --phone-base /sdcard/Download/sdxl_qnn \
   --qnn-lib-dir /path/to/qnn_sdk/lib/aarch64-android \
   --qnn-bin-dir /path/to/qnn_sdk/bin/aarch64-android
 ```
@@ -139,6 +140,7 @@ python scripts/deploy_to_phone.py \
 
 ```bash
 pkg install python python-numpy python-pillow
+termux-setup-storage
 ```
 
 ### 5. Generate
@@ -146,11 +148,11 @@ pkg install python python-numpy python-pillow
 #### Standalone (in Termux on phone)
 
 ```bash
-su --mount-master
 export PATH=/data/data/com.termux/files/usr/bin:$PATH
-python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "1girl, anime, cherry blossoms"
-python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "dark castle" --cfg 2.0 --neg "blurry"
-python3 /data/local/tmp/sdxl_qnn/phone_gen/generate.py "landscape" --seed 777 --steps 8
+export SDXL_QNN_BASE=/sdcard/Download/sdxl_qnn
+python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "1girl, anime, cherry blossoms"
+python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "dark castle" --cfg 2.0 --neg "blurry"
+python3 "$SDXL_QNN_BASE/phone_gen/generate.py" "landscape" --seed 777 --steps 8
 ```
 
 #### Via APK
@@ -162,7 +164,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The APK provides a full GUI: prompt, negative prompt, CFG, steps, seed, contrast stretching, progress bar, save to gallery.  
-Use ⚙️ Settings to specify custom model paths.
+The current default shared path is `/sdcard/Download/sdxl_qnn`; use ⚙️ Settings if you want a different layout.
 
 #### Host-side (from PC via ADB)
 
@@ -172,10 +174,10 @@ python SDXL/generate.py "cat on windowsill, masterpiece" --seed 42
 
 ## What is actually on the phone right now?
 
-The minimal required layout for generation is still the one used by the app and deploy scripts, but the live device snapshot currently contains a richer SDXL deployment with additional model libs, helper scripts, and QNN config JSON files.
+The current default deploy target is `/sdcard/Download/sdxl_qnn`, but the live device snapshot linked below is a historical rooted layout which still helps document the produced files.
 
 - minimal required structure: documented below;
-- live observed structure: [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
+- live observed historical structure: [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
 
 ## Project structure
 
@@ -244,7 +246,7 @@ Prompt ──▶│ CLIP-L ──┐                                            
 ## Minimal phone file structure
 
 ```text
-/data/local/tmp/sdxl_qnn/
+/sdcard/Download/sdxl_qnn/
 ├── context/                               (QNN context binaries)
 │   ├── clip_l.serialized.bin.bin          (~223 MB)
 │   ├── clip_g.serialized.bin.bin          (~1.3 GB)
@@ -268,15 +270,16 @@ Prompt ──▶│ CLIP-L ──┐                                            
 - **Resolution is fixed** at 1024×1024 — others need full re-conversion
 - **VAE FP16** slightly compresses color range -> percentile contrast stretching is applied
 - **CFG doubles the time** — UNet runs twice (cond + uncond) per step
-- **Root required** — for QNN runtime access
 - **Termux required** — Python runtime for `phone_generate.py`
+- **Android shared-storage access may need manual confirmation** — especially for APK use on Android 11+
 - Tested only on **OnePlus 13 (SM8750)**
 
 ## Known issues
 
 - First run of each component is slower (loading a context binary into the NPU)
 - Low RAM may cause process kill — close other apps
-- `su --mount-master` is mandatory when calling from APK (mount namespace isolation)
+- On Android 11+, the APK may need "all files access" to read `/sdcard/Download/sdxl_qnn`
+- If `python3` is not reachable from the app process, adjust the Python command/path in ⚙️ Settings
 - numpy and torch use different RNGs — the same seed produces different but valid images
 
 ## License
@@ -284,6 +287,7 @@ Prompt ──▶│ CLIP-L ──┐                                            
 Apache 2.0 — see [LICENSE](LICENSE)
 
 Dependencies:
+
 - Qualcomm QAIRT SDK — proprietary Qualcomm license
 - SDXL-Lightning LoRA (ByteDance) — Apache 2.0
 - Stable Diffusion XL — CreativeML Open RAIL-M

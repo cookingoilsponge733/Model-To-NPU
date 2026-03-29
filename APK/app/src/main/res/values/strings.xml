@@ -16,9 +16,9 @@
     <string name="image_desc">Сгенерированное изображение</string>
     <string name="settings">Настройки</string>
     <string name="settings_title">Настройки моделей</string>
-    <string name="settings_desc">Укажите путь к папке с моделями на телефоне.\nМодели можно задеплоить через scripts/deploy_to_phone.py\nили скопировать вручную.</string>
+    <string name="settings_desc">Укажите путь к общей папке с моделями на телефоне.\nПо умолчанию используется /sdcard/Download/sdxl_qnn.\nМодели можно задеплоить через scripts/deploy_to_phone.py или скопировать вручную.</string>
     <string name="settings_base_dir_hint">Путь к папке моделей на телефоне</string>
-    <string name="settings_python_hint">Путь к Python3 (Termux)</string>
+    <string name="settings_python_hint">Команда или путь к Python3</string>
     <string name="settings_verify">Проверить файлы</string>
     <string name="settings_save">Сохранить</string>
     <string name="settings_reset">Сброс</string>
