@@ -37,6 +37,7 @@ Right now the implemented and documented pipeline is **Stable Diffusion XL** run
 - **Status of docs:** updated to the current known layout
 
 For a live example of what a deployed phone-side SDXL directory currently looks like, see [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
+For a small rooted sample bundle with real helper files, logs, and output PNGs, see [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
 
 For accumulated technical pitfalls and implementation notes, see [`SDXL/LESSONS_LEARNED.md`](SDXL/LESSONS_LEARNED.md) and the Russian counterpart [`SDXL/LESSONS_LEARNED_RU.md`](SDXL/LESSONS_LEARNED_RU.md).
 
@@ -181,6 +182,7 @@ The current default deploy target is `/sdcard/Download/sdxl_qnn`, but the live d
 
 - minimal required structure: documented below;
 - live observed historical structure: [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
+- lightweight rooted sample files: [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
 
 ## Project structure
 
@@ -197,6 +199,7 @@ The current default deploy target is `/sdcard/Download/sdxl_qnn`, but the live d
 │   └── merges.txt
 ├── examples/
 │   └── phone-sdxl-qnn-layout.md ← Live phone-side deployment example
+│   └── rooted-phone-sample/     ← Small rooted sample files, logs, and PNG outputs
 ├── .github/
 │   └── ISSUE_TEMPLATE/
 │       └── bug_report.md

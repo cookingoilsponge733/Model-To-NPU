@@ -37,6 +37,7 @@
 - **Статус документации:** обновлена под текущую известную структуру
 
 Для живого примера того, как сейчас выглядит SDXL-папка на телефоне после деплоя, см. [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
+Для небольшого rooted-набора с реальными helper-файлами, логами и PNG-результатами см. [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
 
 Для практических подводных камней и накопленных технических заметок см. [`SDXL/LESSONS_LEARNED.md`](SDXL/LESSONS_LEARNED.md) и русскую версию [`SDXL/LESSONS_LEARNED_RU.md`](SDXL/LESSONS_LEARNED_RU.md).
 
@@ -181,6 +182,7 @@ python SDXL/generate.py "cat on windowsill, masterpiece" --seed 42
 
 - минимально необходимая структура — ниже;
 - живая историческая структура — в [`examples/phone-sdxl-qnn-layout.md`](examples/phone-sdxl-qnn-layout.md).
+- облегчённый rooted-набор файлов — в [`examples/rooted-phone-sample/`](examples/rooted-phone-sample/).
 
 ## Структура проекта
 
@@ -197,6 +199,7 @@ python SDXL/generate.py "cat on windowsill, masterpiece" --seed 42
 │   └── merges.txt
 ├── examples/
 │   └── phone-sdxl-qnn-layout.md ← живой пример раскладки на телефоне
+│   └── rooted-phone-sample/     ← небольшой rooted-набор файлов, логов и PNG
 ├── .github/
 │   └── ISSUE_TEMPLATE/
 │       └── bug_report.md
