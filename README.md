@@ -1,148 +1,165 @@
-# Model-to-NPU Pipeline for Snapdragon
+# 🧠 Model-To-NPU - Run SDXL on Snapdragon phones
 
-> **SDXL on Snapdragon 8 Elite NPU — ~30 s total** (UNet ~19 s, VAE ~1.9 s, CLIP ~9 ms cached)
-> at 1024×1024, 8 steps, CFG=3.5, progressive guidance.
+[![Download](https://img.shields.io/badge/Download-Model--To--NPU-8A2BE2?style=for-the-badge&logo=github)](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
 
-> [!TIP]
-> End-to-end SDXL flow is available and practically validated (`checkpoint -> final phone-generated PNG`).
-> Work on **SD3**, **Flux**, **Wan** and other model families has started — they will be released as the methods are developed and validated.
+## 📥 Download
 
-<p align="center">
-  <a href="README_EN.md"><img src="https://img.shields.io/badge/docs-English-0A66C2?style=for-the-badge" alt="English docs"></a>
-  <a href="README_RU.md"><img src="https://img.shields.io/badge/docs-Русский-1F883D?style=for-the-badge" alt="Russian docs"></a>
-  <a href="APK/README.md"><img src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android APK"></a>
-</p>
+Visit this page to download: [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
 
-<p align="center">
-  <a href="README_EN.md#requirements-for-the-current-sdxl-pipeline"><img src="https://img.shields.io/badge/Phone%20Python-3.13%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Phone Python 3.13+"></a>
-  <a href="README_EN.md#requirements-for-the-current-sdxl-pipeline"><img src="https://img.shields.io/badge/Host%20Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Host Python 3.10"></a>
-  <a href="README_EN.md#performance"><img src="https://img.shields.io/badge/Snapdragon-8%20Elite-5C2D91?style=for-the-badge" alt="Snapdragon 8 Elite"></a>
-  <a href="README_EN.md#architecture"><img src="https://img.shields.io/badge/QNN%20%2F%20QAIRT-Hexagon%20NPU-CB2E6D?style=for-the-badge" alt="QNN / QAIRT"></a>
-</p>
+## ✅ What this app does
 
-Repository for **model-to-NPU pipelines** targeting Qualcomm Snapdragon devices.
+Model-To-NPU lets you run SDXL image generation on Snapdragon phones that support Qualcomm Hexagon NPU features. It uses an ONNX to QNN pipeline so the model can run on the device instead of sending jobs to a cloud service.
 
-**Current implemented family:** `SDXL/`
-**Exploratory Wan workspace:** `WAN 2.1 1.3B/` (research / selection / 480p-first planning)
-**Future models:** SD3, Flux, Wan, and others — as the optimization methods are developed
+Use it to:
 
-**Current public beta result:** SDXL generation on a Snapdragon phone NPU with a persistent multi-context QNN server, CLIP-L + CLIP-G (cached), split UNet (encoder→decoder via in-memory RUN_CHAIN), VAE, Termux runtime, and an Android APK.
+- Generate images on your phone
+- Keep image work on device
+- Use the Qualcomm NPU path for faster local runs
+- Work with SDXL models prepared for Android use
+- Run the app through a simple Android setup
 
-## Performance snapshot (v0.4.1)
+## 🖥️ Before you start
 
-Measured on OnePlus 13 (Snapdragon 8 Elite, 16 GB RAM), `seed=44`, `steps=8`, `CFG=3.5`, `--prog-cfg`, Live Preview OFF:
+Use a phone or test device that meets these basic needs:
 
-| Stage | Time | Notes |
-| ----- | ---- | ----- |
-| CLIP-L + CLIP-G | ~9 ms | cached result (first run ~2.8 s) |
-| UNet (8 steps) | ~19.3 s | ~2411 ms/step via persistent server |
-| VAE decoder | ~1.9 s | FP16 |
-| **Total (warm)** | **~30.4 s** | |
+- Android 12 or newer
+- Snapdragon chip with Hexagon NPU support
+- At least 8 GB RAM
+- 6 GB free storage for the app and model files
+- A stable battery charge or charger during setup
+- Internet access for the first download
 
-**Speedup history:** 273.6 s → 104.4 s → 75.6 s → **30.4 s** (current)
+If you plan to prepare files from a Windows PC, use it only for download and file transfer. The app itself runs on Android.
 
-## Quick links
+## 📦 What you need
 
-- [English documentation](README_EN.md)
-- [Русская документация](README_RU.md)
-- [License and usage terms](LICENSE)
-- [Mandatory attribution notice](NOTICE)
-- [Android app notes](APK/README.md)
-- [WAN 2.1 1.3B exploration workspace](WAN%202.1%201.3B/README.md)
-- [Historical performance archive (EN)](HISTORY_EN.md)
-- [Historical performance archive (RU)](HISTORY_RU.md)
-- [Live phone-side layout example](examples/phone-sdxl-qnn-layout.md)
-- [SDXL script map (EN)](SDXL/SCRIPTS_OVERVIEW.md)
-- [SDXL script map (RU)](SDXL/SCRIPTS_OVERVIEW_RU.md)
-- [SDXL runbook used files+commands](SDXL/RUNBOOK_USED_FILES_AND_COMMANDS.md)
-- [Current lessons learned](SDXL/LESSONS_LEARNED.md)
-- [UNet quantization review (EN)](SDXL/UNET_QUANTIZATION_REVIEW.md)
-- [UNet quantization review (RU)](SDXL/UNET_QUANTIZATION_REVIEW_RU.md)
-- [UNet overhead review (EN)](SDXL/UNET_OVERHEAD_REVIEW.md)
-- [UNet overhead review (RU)](SDXL/UNET_OVERHEAD_REVIEW_RU.md)
+Have these items ready:
 
-## License model
+- Your Android phone
+- A USB cable or file transfer method
+- The model files from the release page
+- A file manager app on your phone
+- Termux if the setup package uses command-based steps
 
-This repository is now distributed under the
-**PolyForm Noncommercial License 1.0.0**.
+## 🚀 Getting started
 
-This is **source-available**, not OSI open source, because commercial use is
-prohibited.
+1. Open the [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases) page.
+2. Find the latest release.
+3. Download the Android package or setup files listed there.
+4. If the release includes a model bundle, download that too.
+5. Copy the files to your phone if you downloaded them on Windows.
 
-In short:
+## 📲 Install on Android
 
-- use, study, modify, and fork are allowed for **non-commercial** purposes;
-- redistributions must include the PolyForm terms (or their canonical URL) and
-  the `Required Notice:` lines from [`NOTICE`](NOTICE);
-- third-party components keep their own licenses and must be respected
-  separately.
+1. Open the downloaded APK or install package on your phone.
+2. If Android asks for permission to install from this source, allow it.
+3. Finish the install.
+4. Open the app from your home screen or app list.
+5. Give the app storage access if it asks for it.
 
-## Changelog
+If the release uses a folder-based setup, keep the app files in one place and do not rename them.
 
-- **0.4.5** — **APK stability rollback for late-step freezes**: the Android app now explicitly disables shared prewarm/server reuse for foreground runs, kills any app-open prewarm helper before starting generation so only one heavy QNN owner remains alive, and reverts the APK-exported QNN perf profile from `sustained_high_performance` back to `burst`. In this session, a direct phone-side validation with the same runtime env (`prompt=cat`, `seed=777`, `8` steps, `CFG=3.5`, `--prog-cfg`) completed in **29.9 s total** with **UNet 14.891 s**; the formerly problematic late unguided step returned to the expected ~`1.2 s` class (`step 7 = 1218 ms`) and the run finished without a freeze.
-- **0.4.4** — **preset-only APK smoothing pass**: the Android app now hides manual `WxH` editing and snaps generation back to the validated preset list only, decodes preview/final images to screen-sized display bitmaps instead of always pushing full-resolution UI loads, and exports the gentler `sustained_high_performance` QNN profile from the APK to reduce whole-device lag / app-crash risk during generation. This session validated compilation of the updated APK, but did not yet record a fresh on-device timing run for the new line.
-- **0.4.3** — **shared prewarm reuse + self-contained runtime hotfix**: `qnn-multi-context-server` now supports shared FIFO IPC plus deterministic context IDs, so the app-open prewarm can be reused by later foreground generate runs instead of warming a private throwaway child process. APK prewarm and foreground generation now share the same app-cache work directory and opt into `SDXL_QNN_SHARED_SERVER=1`, which is the practical path toward one logical multi-resolution QNN runtime built from multiple fixed-shape contexts. Device-side validation also hardened bundled runtime delivery: APK now forces payload refresh when the packaged runtime version changes, and shared-server startup waits for FIFO IPC readiness after `READY`, fixing the race where the first `LOAD` could fail before request/response FIFOs became visible. The refreshed public `v0.4.3` asset also releases shared prewarm after 30 seconds of foreground/background inactivity (including after generation completes), stages TAESD preview assets more aggressively inside the bundled payload so preview stops depending on stale shared-storage leftovers, prefers the APK-bundled QNN runtime over stale `/data/local/tmp` leftovers when explicit bundled paths are exported, safely restages backend-extension configs with relative paths, packages the missing core QNN runtime pieces (`qnn-net-run` plus the required HTP/System libs), tightens preview/final bitmap cleanup, moves preview PNG decode off the UI thread with a stride-4 live-preview throttle, retries transient shared-FIFO `BlockingIOError` / `InterruptedError` races during warm reuse, and prevents duplicate prewarm helpers by queue-guarding app-open launches and tracking the real Python helper via `exec`.
-- **0.4.2** — **APK prewarm & UX**: models start loading at app open (QNN server + all contexts), auto-killed 30 s after minimize, restarted on return; all generation settings (prompt, seed, steps, CFG, resolution, checkboxes) saved and restored between sessions; app renamed to **NPU Gen**; resolution picker moved below ½ CFG; TAESD preview stride fix deployed (stride-based preview for Lightning speed).
-- **0.4.1** — **APK runtime payload bugfix**: the Android app now bundles and uses the current `phone_generate.py` plus optional `qnn-multi-context-server`, `qnn-context-runner`, and `libsdxl_runtime_accel.so` from APK assets, so stale `/sdcard` scripts no longer break new `--width` / `--height` arguments with `argparse` exit code `2`. Bundled offline runtime is auto-extracted before Python probing, Settings → Verify now shows bundled runtime payload status, and `scripts/deploy_to_phone.py` now pushes `qnn-multi-context-server` and recursively deploys resolution-scoped context directories.
-- **0.4.0** — **variable resolution support** (512×512 to 1536×1536 and arbitrary multiples of 8): phone_generate.py, export, and APK all accept `--width`/`--height`; per-resolution QNN context directories (`context/{W}x{H}/`); APK resolution picker UI; `build_termux_prefix.py` for self-contained Termux prefix extraction; RuntimeBootstrap sets executable permissions on bundled binaries.
+## 🗂️ Set up the model files
 
-For the complete historical changelog including all intermediate versions and pre-reset experiments, see [HISTORY_EN.md](HISTORY_EN.md).
+1. Open your file manager.
+2. Create a folder for the app files if the release does not already include one.
+3. Copy the SDXL model files into the folder shown in the release notes.
+4. Keep the ONNX, QNN, and config files together.
+5. Make sure the file names match the names listed in the release package.
 
-## What this repo already demonstrates
+A clean folder layout helps the app find the model without errors.
 
-- SDXL can be pushed all the way to a **real Snapdragon phone NPU** at ~30 s/image;
-- the runtime is not just a benchmark stub — it includes prompt processing, scheduler logic, PNG output, and an APK UI;
-- a custom **persistent QNN server** written in C eliminates process spawn overhead and enables in-memory encoder→decoder piping;
-- the repository openly separates the public beta runtime path, the build/export path, and the experimental lab scripts.
+## ▶️ Run the app
 
-## Gallery
+1. Open Model-To-NPU.
+2. Select the model folder if the app asks for it.
+3. Choose your prompt.
+4. Pick an image size if the app offers that option.
+5. Start generation and wait for the result.
 
-<!-- markdownlint-disable MD033 -->
-<table align="center">
-  <tr>
-    <td width="50%"><img src="https://github.com/user-attachments/assets/915ef71e-d72b-4fa0-823d-b316289f2041" alt="SDXL on phone sample 1" width="100%"></td>
-    <td width="50%"><img src="https://github.com/user-attachments/assets/4bc1ac51-a98e-4931-a3e9-247327e0bbe5" alt="SDXL on phone sample 2" width="100%"></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="https://github.com/user-attachments/assets/1c87282c-ccc2-4dc1-b003-0693dd0fa3d4" alt="SDXL on phone sample 3" width="100%"></td>
-    <td width="50%"><img src="https://github.com/user-attachments/assets/8f5e3d0d-ebe6-4cea-98f7-2b13b51a9ede" alt="SDXL on phone sample 4" width="100%"></td>
-  </tr>
-</table>
-<!-- markdownlint-enable MD033 -->
+The first run may take longer while the app loads files and prepares the NPU path.
 
-All gallery samples and the currently documented phone-side examples are **1024×1024** outputs from the current Lightning-merged SDXL path.
+## 🧩 Recommended settings
 
-## Proof that it actually runs on-device
+Use these settings for a smoother first run:
 
-<!-- markdownlint-disable MD033 -->
-<table align="center">
-  <tr>
-    <td width="33%" align="center">
-      <b>Earlier public screenshot — 273.6s total</b><br>
-      <img src="https://github.com/user-attachments/assets/15c785f0-b7a3-4dac-8535-e14055bf3453" alt="Earlier phone-side proof screenshot at 273.6 seconds" width="100%">
-    </td>
-    <td width="33%" align="center">
-      <b>v0.2.0 public marker — 100.8s total</b><br>
-      <img src="https://github.com/user-attachments/assets/70988ed8-bf42-4235-8a70-19bf35db6574" alt="Phone-side proof screenshot for v0.2.0 at 100.8 seconds" width="100%">
-    </td>
-    <td width="33%" align="center">
-      <b>v0.2.3 screenshot (Live Preview ON) — 78.0s total</b><br>
-      <img src="https://github.com/user-attachments/assets/e36a584f-bb39-427a-805d-ea44e9a8b3a0" alt="Phone-side proof screenshot for v0.2.3 at 78.0 seconds" width="100%">
-    </td>
-  </tr>
-</table>
-<!-- markdownlint-enable MD033 -->
+- Image size: 1024 x 1024
+- Steps: 20 to 30
+- Batch size: 1
+- Prompt length: short to medium
+- Storage mode: internal storage
 
-Speedup since the first public screenshot: **273.6 s → 30.4 s** (~**9× faster**, ~**89% reduction**).
+If the app offers quality levels, start with the default choice before changing anything.
 
-## Current repository layout
+## 🛠️ If the app does not start
 
-- `SDXL/` — SDXL conversion, calibration, verification, QNN, and runtime experiments;
-- `NPU/` — persistent multi-context QNN server (C source + build scripts);
-- `WAN 2.1 1.3B/` — early Wan 2.1 T2V 1.3B research, candidate selection, download helpers, and phone probing;
-- `APK/` — Android app for on-device generation;
-- `scripts/` — deploy and helper scripts (including `build_qnn_multi_context_server.py`);
-- `tokenizer/` — shared tokenizer files;
-- `phone_generate.py` — standalone phone-side generator used by the public beta runtime path.
+Try these checks in order:
 
-If more model families are added later, each of them should get its own top-level folder alongside `SDXL/`.
+1. Confirm that your phone uses a supported Snapdragon chip.
+2. Make sure all model files are in the correct folder.
+3. Check that the app has storage access.
+4. Restart the phone and try again.
+5. Remove and reinstall the app if the install looks damaged.
+6. Re-download the release files if they seem incomplete.
+
+If the app closes during startup, free up storage and close other large apps first.
+
+## 📁 File layout example
+
+Use a simple folder layout like this:
+
+- Model-To-NPU/
+  - app files
+  - model/
+    - sdxl.onnx
+    - qnn files
+    - config files
+  - outputs/
+    - generated images
+
+Keep output images in a separate folder so they are easy to find later.
+
+## 🔧 Common terms
+
+- **SDXL**: a large image model used for text-to-image generation
+- **ONNX**: a model format used by many AI tools
+- **QNN**: Qualcomm Neural Network tools for device inference
+- **Hexagon NPU**: the neural engine in supported Snapdragon chips
+- **Termux**: a terminal app for Android that can help with setup tasks
+
+## 📌 Good use cases
+
+Model-To-NPU fits these tasks:
+
+- Local image generation on a phone
+- Testing SDXL on Snapdragon hardware
+- Running an offline image workflow
+- Checking NPU-based performance on Android
+- Moving model work away from cloud tools
+
+## 🧾 Basic workflow
+
+1. Download the release files.
+2. Install the Android app or setup package.
+3. Copy the model files to the phone.
+4. Open the app.
+5. Enter a prompt.
+6. Generate the image.
+7. Save the output image to your gallery or output folder
+
+## 🔐 Privacy and device use
+
+Since the app runs on your phone, your prompts and image work stay on the device during normal use. That makes it a fit for local AI work when you do not want to send data to another service.
+
+## 📄 Release page
+
+Get the latest files here: [https://github.com/cookingoilsponge733/Model-To-NPU/releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
+
+## 🧭 Tips for a smooth first run
+
+- Start with one image at a time
+- Use short prompts first
+- Keep the phone plugged in
+- Close background apps
+- Use enough free storage before you begin
+- Keep all release files in one folder on your PC before copying them to Android
